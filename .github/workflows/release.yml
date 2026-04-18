@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   # ──────────────────────────────────────────
   # Windows (.msi)
@@ -111,7 +114,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Google Takeout Connect ${{ github.ref_name }}"
           releaseDraft: true
-          args: --target aarch64-apple-darwin
+          args: --target aarch64-apple-darwin --bundles dmg
 
   # ──────────────────────────────────────────
   # macOS Intel (.dmg / x86_64)
@@ -156,4 +159,4 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Google Takeout Connect ${{ github.ref_name }}"
           releaseDraft: true
-          args: --target x86_64-apple-darwin
+          args: --target x86_64-apple-darwin --bundles dmg
