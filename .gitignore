@@ -1,0 +1,14 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+.env
+*.local
+
+# バイナリ（CI/CDで自動取得するためgit管理外）
+src-tauri/binaries/*.exe
+src-tauri/binaries/exiftool-*
+src-tauri/binaries/ffmpeg-*
+
+# アイコン生成用の中間ファイル
+app-icon-source.png

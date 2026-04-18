@@ -1,0 +1,169 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  # ──────────────────────────────────────────
+  # Windows (.msi)
+  # ──────────────────────────────────────────
+  build-windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Rust セットアップ
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust キャッシュ
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: ExifTool ダウンロード
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://exiftool.org/exiftool-13.32_64.zip" -OutFile exiftool.zip
+          Expand-Archive exiftool.zip -DestinationPath exiftool_tmp
+          $exe = Get-ChildItem exiftool_tmp -Recurse -Filter "*.exe" | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path "src-tauri/binaries" | Out-Null
+          Move-Item $exe.FullName "src-tauri/binaries/exiftool-x86_64-pc-windows-msvc.exe"
+          Remove-Item exiftool.zip, exiftool_tmp -Recurse -Force
+
+      - name: ffmpeg ダウンロード
+        shell: pwsh
+        run: |
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
+          $exe = Get-ChildItem ffmpeg_tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+          Move-Item $exe.FullName "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"
+          Remove-Item ffmpeg.zip, ffmpeg_tmp -Recurse -Force
+
+      - run: npm install
+
+      - name: Tauri ビルド (Windows MSI)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Google Takeout Connect ${{ github.ref_name }}"
+          releaseBody: |
+            ## ダウンロード
+
+            | OS | ファイル |
+            |---|---|
+            | Windows | `*_x64_ja-JP.msi` |
+            | macOS (Apple Silicon) | `*_aarch64.dmg` |
+            | macOS (Intel) | `*_x64.dmg` |
+
+            ## インストール方法
+            - **Windows**: `.msi` をダブルクリックしてインストール
+            - **macOS**: `.dmg` を開いて Applications にドラッグ
+              ※ 初回起動時は「システム設定 → プライバシーとセキュリティ」から「このまま開く」を選択してください
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc
+
+  # ──────────────────────────────────────────
+  # macOS Apple Silicon (.dmg / aarch64)
+  # ──────────────────────────────────────────
+  build-macos-arm:
+    name: macOS (Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Rust セットアップ
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust キャッシュ
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: ExifTool / ffmpeg インストール & 配置
+        run: |
+          brew install exiftool ffmpeg
+          mkdir -p src-tauri/binaries
+          cp "$(which exiftool)" src-tauri/binaries/exiftool-aarch64-apple-darwin
+          cp "$(which ffmpeg)"   src-tauri/binaries/ffmpeg-aarch64-apple-darwin
+          chmod +x src-tauri/binaries/*-apple-darwin
+
+      - run: npm install
+
+      - name: Tauri ビルド (macOS ARM)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Google Takeout Connect ${{ github.ref_name }}"
+          releaseDraft: true
+          args: --target aarch64-apple-darwin
+
+  # ──────────────────────────────────────────
+  # macOS Intel (.dmg / x86_64)
+  # ──────────────────────────────────────────
+  build-macos-intel:
+    name: macOS (Intel)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Rust セットアップ
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Rust キャッシュ
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: ExifTool / ffmpeg インストール & 配置
+        run: |
+          brew install exiftool ffmpeg
+          mkdir -p src-tauri/binaries
+          cp "$(which exiftool)" src-tauri/binaries/exiftool-x86_64-apple-darwin
+          cp "$(which ffmpeg)"   src-tauri/binaries/ffmpeg-x86_64-apple-darwin
+          chmod +x src-tauri/binaries/*-apple-darwin
+
+      - run: npm install
+
+      - name: Tauri ビルド (macOS Intel)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Google Takeout Connect ${{ github.ref_name }}"
+          releaseDraft: true
+          args: --target x86_64-apple-darwin
