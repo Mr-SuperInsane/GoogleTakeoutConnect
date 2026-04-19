@@ -51,6 +51,11 @@ jobs:
           $ffExe = Get-ChildItem ffmpeg_tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
           New-Item -ItemType Directory -Force -Path "src-tauri/binaries" | Out-Null
           Move-Item $etExe.FullName "src-tauri/binaries/exiftool-x86_64-pc-windows-msvc.exe" -Force
+          # exiftool_files（Perl DLL群）も一緒にコピー
+          $etFilesDir = Get-ChildItem exiftool_tmp -Recurse -Filter "exiftool_files" -Directory | Select-Object -First 1
+          if ($etFilesDir) {
+            Copy-Item $etFilesDir.FullName "src-tauri/binaries/exiftool_files" -Recurse -Force
+          }
           Move-Item $ffExe.FullName "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"   -Force
           Remove-Item exiftool.zip, exiftool_tmp, ffmpeg.zip, ffmpeg_tmp -Recurse -Force
 

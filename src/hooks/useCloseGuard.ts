@@ -1,17 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
-/**
- * 処理中にウィンドウを閉じようとした際に確認ダイアログを表示する
- */
 export function useCloseGuard(isProcessing: boolean) {
+  const isProcessingRef = useRef(isProcessing);
+
+  useEffect(() => {
+    isProcessingRef.current = isProcessing;
+  }, [isProcessing]);
+
   useEffect(() => {
     const win = getCurrentWindow();
     let unlisten: (() => void) | null = null;
 
     win.onCloseRequested(async (event) => {
-      if (!isProcessing) return;
+      if (!isProcessingRef.current) return;
 
       event.preventDefault();
 
@@ -35,5 +38,5 @@ export function useCloseGuard(isProcessing: boolean) {
     return () => {
       unlisten?.();
     };
-  }, [isProcessing]);
+  }, []); // リスナーは一度だけ登録
 }

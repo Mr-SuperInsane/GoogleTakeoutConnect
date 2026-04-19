@@ -9,6 +9,7 @@ src-tauri/gen/
 src-tauri/binaries/*.exe
 src-tauri/binaries/exiftool-*
 src-tauri/binaries/ffmpeg-*
+src-tauri/binaries/exiftool_files/
 
 # アイコン生成用の中間ファイル
 app-icon-source.png
