@@ -1,10 +1,7 @@
 {
   "bundle": {
-    "windows": {
-      "wix": {
-        "fragmentPaths": ["wix/exiftool_files.wxs"],
-        "componentRefs": ["ExiftoolFilesGroup"]
-      }
+    "resources": {
+      "resources/exiftool_files.zip": "exiftool_files.zip"
     }
   }
 }

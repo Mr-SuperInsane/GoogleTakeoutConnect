@@ -112,6 +112,9 @@ function App() {
           <ResultView result={result} state={state} logs={logs} onReset={handleReset} />
         )}
       </main>
+      <div className="fixed bottom-2 right-3 text-xs text-gray-400 select-none tracking-widest pointer-events-none">
+        INSANE PROJECTS
+      </div>
     </div>
   );
 }

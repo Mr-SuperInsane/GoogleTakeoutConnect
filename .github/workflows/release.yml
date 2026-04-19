@@ -70,38 +70,17 @@ jobs:
             Remove-Item -ErrorAction SilentlyContinue exiftool.zip, exiftool_tmp, ffmpeg.zip, ffmpeg_tmp -Recurse -Force
           }
 
-      - name: WiX フラグメント生成 (exiftool_files)
+      - name: exiftool_files.zip 作成
         shell: pwsh
         run: |
-          $filesDir = (Resolve-Path "src-tauri/binaries/exiftool_files").Path
-          New-Item -ItemType Directory -Force -Path "src-tauri/wix" | Out-Null
-          $ns = "http://schemas.microsoft.com/wix/2006/wi"
-          $doc = New-Object System.Xml.XmlDocument
-          $doc.AppendChild($doc.CreateXmlDeclaration("1.0","UTF-8",$null)) | Out-Null
-          $wix = $doc.CreateElement("Wix",$ns); $doc.AppendChild($wix) | Out-Null
-          $frag = $doc.CreateElement("Fragment",$ns); $wix.AppendChild($frag) | Out-Null
-          $dirRef = $doc.CreateElement("DirectoryRef",$ns)
-          $dirRef.SetAttribute("Id","INSTALLDIR"); $frag.AppendChild($dirRef) | Out-Null
-          $dir = $doc.CreateElement("Directory",$ns)
-          $dir.SetAttribute("Id","EXIFTOOL_FILES_DIR"); $dir.SetAttribute("Name","exiftool_files")
-          $dirRef.AppendChild($dir) | Out-Null
-          $grp = $doc.CreateElement("ComponentGroup",$ns)
-          $grp.SetAttribute("Id","ExiftoolFilesGroup"); $frag.AppendChild($grp) | Out-Null
-          $i = 0
-          Get-ChildItem $filesDir -Recurse -File | ForEach-Object {
-            $src = $_.FullName.Replace('\','/')
-            $comp = $doc.CreateElement("Component",$ns)
-            $comp.SetAttribute("Id","ExifComp$i"); $comp.SetAttribute("Guid","*")
-            $dir.AppendChild($comp) | Out-Null
-            $f = $doc.CreateElement("File",$ns)
-            $f.SetAttribute("Id","ExifFile$i"); $f.SetAttribute("Source",$src); $f.SetAttribute("KeyPath","yes")
-            $comp.AppendChild($f) | Out-Null
-            $ref = $doc.CreateElement("ComponentRef",$ns)
-            $ref.SetAttribute("Id","ExifComp$i"); $grp.AppendChild($ref) | Out-Null
-            $i++
+          if (Test-Path "src-tauri/binaries/exiftool_files") {
+            New-Item -ItemType Directory -Force -Path "src-tauri/resources" | Out-Null
+            Compress-Archive -Path "src-tauri/binaries/exiftool_files" `
+              -DestinationPath "src-tauri/resources/exiftool_files.zip" -Force
+            Write-Host "exiftool_files.zip created"
+          } else {
+            Write-Warning "exiftool_files not found, skipping zip creation"
           }
-          $doc.Save((Resolve-Path ".").Path + "/src-tauri/wix/exiftool_files.wxs")
-          Write-Host "WiX fragment generated: $i files"
 
       - run: npm install
 

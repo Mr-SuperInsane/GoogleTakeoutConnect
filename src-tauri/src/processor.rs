@@ -1,6 +1,13 @@
 use crate::matcher::TakeoutMeta;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+static EXIFTOOL_HOME: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_exiftool_home(home: PathBuf) {
+    let _ = EXIFTOOL_HOME.set(home);
+}
 
 fn make_command(program: &Path) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
@@ -13,14 +20,23 @@ fn make_command(program: &Path) -> std::process::Command {
 }
 
 pub fn find_tool(name: &str) -> Option<PathBuf> {
+    // Windows: AppDataに展開したexiftool_home内を優先
+    #[cfg(windows)]
+    if name == "exiftool" {
+        if let Some(home) = EXIFTOOL_HOME.get() {
+            let exe = home.join("exiftool.exe");
+            if exe.exists() {
+                return Some(exe);
+            }
+        }
+    }
+
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            // Tauriのexternalbin: 実行ファイルと同じディレクトリに配置される
             let beside = dir.join(name);
             if beside.exists() {
                 return Some(beside);
             }
-            // Windows: .exe 付き
             let beside_exe = dir.join(format!("{}.exe", name));
             if beside_exe.exists() {
                 return Some(beside_exe);
