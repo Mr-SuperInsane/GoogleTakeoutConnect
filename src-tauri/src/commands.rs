@@ -143,6 +143,11 @@ async fn process_single_zip(
     // JSONインデックス構築（全ディレクトリを横断）
     let json_index = build_json_index(&files);
 
+    let completed_dir = out_path.join("completed");
+    let failed_dir = out_path.join("failed");
+    std::fs::create_dir_all(&completed_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&failed_dir).map_err(|e| e.to_string())?;
+
     let media_count = media_files.len() as u32;
 
     for (idx, media_path) in media_files.iter().enumerate() {
@@ -152,17 +157,9 @@ async fn process_single_zip(
             .unwrap_or("")
             .to_string();
 
-        // 出力パスの構築
-        let relative = media_path
-            .strip_prefix(&extract_dir)
-            .unwrap_or(media_path.as_path());
-        let dst = out_path.join(relative);
-        if let Some(parent) = dst.parent() {
-            std::fs::create_dir_all(parent).ok();
-        }
-
         let (status, message) = match find_meta_for_media(media_path, &json_index) {
             Ok(meta) => {
+                let dst = unique_dst(&completed_dir, &file_name);
                 match apply_metadata(media_path, &dst, &meta, exiftool, ffmpeg) {
                     Ok(_) => {
                         *success += 1;
@@ -170,7 +167,10 @@ async fn process_single_zip(
                     }
                     Err(e) => {
                         *failed += 1;
-                        let _ = std::fs::copy(media_path, &dst);
+                        let dst_failed = unique_dst(&failed_dir, &file_name);
+                        let _ = std::fs::copy(media_path, &dst_failed);
+                        // apply_metadata がコピーした dst を削除
+                        let _ = std::fs::remove_file(&dst);
                         ("failed".to_string(), e.to_string())
                     }
                 }
@@ -182,6 +182,7 @@ async fn process_single_zip(
                     SkipReason::JsonParseError(_) => skip_reasons.parse_error += 1,
                 }
                 *skipped += 1;
+                let dst = unique_dst(&completed_dir, &file_name);
                 let _ = std::fs::copy(media_path, &dst);
                 ("skipped".to_string(), reason.message())
             }
@@ -209,6 +210,28 @@ async fn process_single_zip(
     }
 
     Ok(())
+}
+
+/// 同名ファイルが存在する場合は `stem_1.ext` のように連番を付与して返す
+fn unique_dst(dir: &Path, file_name: &str) -> PathBuf {
+    let path = dir.join(file_name);
+    if !path.exists() {
+        return path;
+    }
+    let p = Path::new(file_name);
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+    let ext = p.extension().and_then(|e| e.to_str());
+    for i in 1u32.. {
+        let candidate = match ext {
+            Some(e) => format!("{}_{}.{}", stem, i, e),
+            None => format!("{}_{}", stem, i),
+        };
+        let candidate_path = dir.join(&candidate);
+        if !candidate_path.exists() {
+            return candidate_path;
+        }
+    }
+    path
 }
 
 #[tauri::command]
