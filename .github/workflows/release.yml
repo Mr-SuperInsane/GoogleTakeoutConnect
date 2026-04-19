@@ -59,6 +59,37 @@ jobs:
           Move-Item $ffExe.FullName "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"   -Force
           Remove-Item exiftool.zip, exiftool_tmp, ffmpeg.zip, ffmpeg_tmp -Recurse -Force
 
+      - name: WiX フラグメント生成 (exiftool_files)
+        shell: pwsh
+        run: |
+          $filesDir = Resolve-Path "src-tauri/binaries/exiftool_files"
+          New-Item -ItemType Directory -Force -Path "src-tauri/wix" | Out-Null
+          $compDefs = @()
+          $compRefs = @()
+          $i = 0
+          Get-ChildItem $filesDir.Path -Recurse -File | ForEach-Object {
+            $src = $_.FullName.Replace('\', '/')
+            $compDefs += "        <Component Id=`"ExifComp$i`" Guid=`"*`"><File Id=`"ExifFile$i`" Source=`"$src`" KeyPath=`"yes`"/></Component>"
+            $compRefs += "      <ComponentRef Id=`"ExifComp$i`"/>"
+            $i++
+          }
+          @"
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR">
+      <Directory Id="EXIFTOOL_FILES_DIR" Name="exiftool_files">
+$($compDefs -join "`n")
+      </Directory>
+    </DirectoryRef>
+    <ComponentGroup Id="ExiftoolFilesGroup">
+$($compRefs -join "`n")
+    </ComponentGroup>
+  </Fragment>
+</Wix>
+"@ | Out-File -FilePath "src-tauri/wix/exiftool_files.wxs" -Encoding UTF8
+          Write-Host "WiX fragment generated: $i files"
+
       - run: npm install
 
       - name: Tauri ビルド (Windows MSI)

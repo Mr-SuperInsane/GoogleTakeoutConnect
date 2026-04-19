@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["wix/exiftool_files.wxs"],
+        "componentRefs": ["ExiftoolFilesGroup"]
+      }
+    }
+  }
+}

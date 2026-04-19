@@ -40,9 +40,6 @@
       "binaries/exiftool",
       "binaries/ffmpeg"
     ],
-    "resources": {
-      "binaries/exiftool_files/**/*": "exiftool_files"
-    },
     "windows": {
       "wix": {
         "language": "ja-JP"
