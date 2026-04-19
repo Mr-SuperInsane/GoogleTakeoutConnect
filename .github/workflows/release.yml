@@ -38,12 +38,18 @@ jobs:
       - name: ExifTool / ffmpeg インストール & 配置
         shell: pwsh
         run: |
-          choco install exiftool ffmpeg -y --no-progress
+          # ExifTool (chocoで単体exe)
+          choco install exiftool -y --no-progress
+          # ffmpeg: DLL不要なstaticビルドを直接ダウンロード
+          $ffUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          Invoke-WebRequest -Uri $ffUrl -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
+          $ffExe = Get-ChildItem ffmpeg_tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
           New-Item -ItemType Directory -Force -Path "src-tauri/binaries" | Out-Null
           $exiftool = Get-Command exiftool -ErrorAction Stop
-          $ffmpeg   = Get-Command ffmpeg   -ErrorAction Stop
           Copy-Item $exiftool.Source "src-tauri/binaries/exiftool-x86_64-pc-windows-msvc.exe" -Force
-          Copy-Item $ffmpeg.Source   "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"   -Force
+          Move-Item $ffExe.FullName  "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"   -Force
+          Remove-Item ffmpeg.zip, ffmpeg_tmp -Recurse -Force
 
       - run: npm install
 
@@ -55,18 +61,52 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Google Takeout Connect ${{ github.ref_name }}"
           releaseBody: |
+            ## Google Takeout Connect v0.1.0
+
+            Google Takeout でエクスポートした写真・動画ファイルに、撮影日時などのメタデータを書き戻すデスクトップアプリです。
+
+            ---
+
+            ## 主な機能
+
+            - **撮影日時の復元**: Google Takeout の JSON サイドカーファイルから撮影日時を読み取り、メディアファイルに書き戻します
+            - **対応形式**: JPEG / PNG / HEIC / WebP / TIFF / DNG / CR2 / NEF / ARW などの画像、MP4 / MOV / MKV などの動画
+            - **ファイルタイムスタンプ更新**: エクスプローラーの「更新日時」「作成日時」も撮影日時に変更
+            - **スキップ理由の表示**: JSON が見つからないファイルや対応外ファイルをログで確認可能
+            - **ExifTool・ffmpeg 同梱**: 別途インストール不要ですぐに使えます
+
+            ---
+
             ## ダウンロード
 
             | OS | ファイル |
             |---|---|
-            | Windows | `*_x64_ja-JP.msi` |
-            | macOS (Apple Silicon) | `*_aarch64.dmg` |
-            | macOS (Intel) | `*_x64.dmg` |
+            | Windows (64bit) | `Google.Takeout.Connect_0.1.0_x64_ja-JP.msi` |
+            | macOS (Apple Silicon / M1以降) | `Google.Takeout.Connect_0.1.0_aarch64.dmg` |
+            | macOS (Intel) | `Google.Takeout.Connect_0.1.0_x64.dmg` |
+
+            ---
 
             ## インストール方法
-            - **Windows**: `.msi` をダブルクリックしてインストール
-            - **macOS**: `.dmg` を開いて Applications にドラッグ
-              ※ 初回起動時は「システム設定 → プライバシーとセキュリティ」から「このまま開く」を選択してください
+
+            ### Windows
+            1. `.msi` ファイルをダブルクリック
+            2. 画面の指示に従ってインストール
+            > SmartScreen の警告が出た場合は「詳細情報」→「実行」を選択してください
+
+            ### macOS
+            1. `.dmg` ファイルを開く
+            2. アプリを `Applications` フォルダにドラッグ
+            > 初回起動時に「開発元を確認できない」と表示された場合は、`システム設定` → `プライバシーとセキュリティ` から「このまま開く」を選択してください
+
+            ---
+
+            ## 使い方
+
+            1. アプリを起動
+            2. 「入力フォルダ」に Google Takeout を展開したフォルダを選択
+            3. 「出力フォルダ」に書き出し先を選択
+            4. 「処理開始」をクリック
           releaseDraft: true
           prerelease: false
           args: --target x86_64-pc-windows-msvc

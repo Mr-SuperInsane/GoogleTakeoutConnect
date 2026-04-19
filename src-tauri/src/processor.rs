@@ -2,6 +2,16 @@ use crate::matcher::TakeoutMeta;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
+fn make_command(program: &Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 pub fn find_tool(name: &str) -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -73,7 +83,7 @@ pub fn apply_metadata(
 
 /// ExifToolで画像メタデータを書き込む
 fn apply_image_meta(dst: &Path, exif_datetime: &str, exiftool: &Path) -> Result<()> {
-    let output = std::process::Command::new(exiftool)
+    let output = make_command(exiftool)
         .args([
             "-overwrite_original",
             &format!("-DateTimeOriginal={}", exif_datetime),
@@ -95,7 +105,7 @@ fn apply_image_meta(dst: &Path, exif_datetime: &str, exiftool: &Path) -> Result<
 fn apply_video_meta(src: &Path, dst: &Path, iso_datetime: &str, ffmpeg: &Path) -> Result<()> {
     let tmp = dst.with_extension(".__tmp__.mp4");
 
-    let output = std::process::Command::new(ffmpeg)
+    let output = make_command(ffmpeg)
         .args([
             "-i",
             src.to_str().context("入力パスの変換に失敗しました")?,
