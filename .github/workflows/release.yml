@@ -38,56 +38,69 @@ jobs:
       - name: ExifTool / ffmpeg インストール & 配置
         shell: pwsh
         run: |
-          # ExifTool: 公式サイトから最新版を直接ダウンロード（chocoシムを避ける）
-          $etPage = Invoke-WebRequest -Uri "https://exiftool.org/" -UseBasicParsing
-          $etVer  = [regex]::Match($etPage.Content, 'exiftool-(\d+\.\d+)_64\.zip').Groups[1].Value
-          Invoke-WebRequest -Uri "https://exiftool.org/exiftool-${etVer}_64.zip" -OutFile exiftool.zip
-          Expand-Archive exiftool.zip -DestinationPath exiftool_tmp
-          $etExe = Get-ChildItem exiftool_tmp -Recurse -Filter "*.exe" | Select-Object -First 1
-          # ffmpeg: DLL不要なstaticビルド
-          $ffUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-          Invoke-WebRequest -Uri $ffUrl -OutFile ffmpeg.zip
-          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
-          $ffExe = Get-ChildItem ffmpeg_tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-          New-Item -ItemType Directory -Force -Path "src-tauri/binaries" | Out-Null
-          Move-Item $etExe.FullName "src-tauri/binaries/exiftool-x86_64-pc-windows-msvc.exe" -Force
-          # exiftool_files（Perl DLL群）も一緒にコピー
-          $etFilesDir = Get-ChildItem exiftool_tmp -Recurse -Filter "exiftool_files" -Directory | Select-Object -First 1
-          if ($etFilesDir) {
-            Copy-Item $etFilesDir.FullName "src-tauri/binaries/exiftool_files" -Recurse -Force
+          $ErrorActionPreference = "Stop"
+          try {
+            # ExifTool: 公式サイトから最新版を直接ダウンロード
+            $etPage = Invoke-WebRequest -Uri "https://exiftool.org/" -UseBasicParsing -TimeoutSec 60
+            $etVer  = [regex]::Match($etPage.Content, 'exiftool-([\d\.]+)_64\.zip').Groups[1].Value
+            if (-not $etVer) { throw "ExifToolのバージョンが取得できませんでした" }
+            Write-Host "ExifTool version: $etVer"
+            Invoke-WebRequest -Uri "https://exiftool.org/exiftool-${etVer}_64.zip" -OutFile exiftool.zip -TimeoutSec 120
+            Expand-Archive exiftool.zip -DestinationPath exiftool_tmp
+            $etExe = Get-ChildItem exiftool_tmp -Recurse -Filter "*.exe" | Select-Object -First 1
+            if (-not $etExe) { throw "exiftool.exeがアーカイブ内に見つかりません" }
+            # ffmpeg: DLL不要なstaticビルド
+            $ffUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+            Invoke-WebRequest -Uri $ffUrl -OutFile ffmpeg.zip -TimeoutSec 300
+            Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
+            $ffExe = Get-ChildItem ffmpeg_tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+            if (-not $ffExe) { throw "ffmpeg.exeがアーカイブ内に見つかりません" }
+            New-Item -ItemType Directory -Force -Path "src-tauri/binaries" | Out-Null
+            Move-Item $etExe.FullName "src-tauri/binaries/exiftool-x86_64-pc-windows-msvc.exe" -Force
+            # exiftool_files（Perl DLL群）も一緒にコピー
+            $etFilesDir = Get-ChildItem exiftool_tmp -Recurse -Filter "exiftool_files" -Directory | Select-Object -First 1
+            if ($etFilesDir) {
+              Copy-Item $etFilesDir.FullName "src-tauri/binaries/exiftool_files" -Recurse -Force
+              Write-Host "exiftool_files をコピーしました"
+            } else {
+              Write-Warning "exiftool_files ディレクトリが見つかりませんでした（このバージョンでは不要の可能性あり）"
+            }
+            Move-Item $ffExe.FullName "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe" -Force
+          } finally {
+            Remove-Item -ErrorAction SilentlyContinue exiftool.zip, exiftool_tmp, ffmpeg.zip, ffmpeg_tmp -Recurse -Force
           }
-          Move-Item $ffExe.FullName "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"   -Force
-          Remove-Item exiftool.zip, exiftool_tmp, ffmpeg.zip, ffmpeg_tmp -Recurse -Force
 
       - name: WiX フラグメント生成 (exiftool_files)
         shell: pwsh
         run: |
-          $filesDir = Resolve-Path "src-tauri/binaries/exiftool_files"
+          $filesDir = (Resolve-Path "src-tauri/binaries/exiftool_files").Path
           New-Item -ItemType Directory -Force -Path "src-tauri/wix" | Out-Null
-          $compDefs = @()
-          $compRefs = @()
+          $ns = "http://schemas.microsoft.com/wix/2006/wi"
+          $doc = New-Object System.Xml.XmlDocument
+          $doc.AppendChild($doc.CreateXmlDeclaration("1.0","UTF-8",$null)) | Out-Null
+          $wix = $doc.CreateElement("Wix",$ns); $doc.AppendChild($wix) | Out-Null
+          $frag = $doc.CreateElement("Fragment",$ns); $wix.AppendChild($frag) | Out-Null
+          $dirRef = $doc.CreateElement("DirectoryRef",$ns)
+          $dirRef.SetAttribute("Id","INSTALLDIR"); $frag.AppendChild($dirRef) | Out-Null
+          $dir = $doc.CreateElement("Directory",$ns)
+          $dir.SetAttribute("Id","EXIFTOOL_FILES_DIR"); $dir.SetAttribute("Name","exiftool_files")
+          $dirRef.AppendChild($dir) | Out-Null
+          $grp = $doc.CreateElement("ComponentGroup",$ns)
+          $grp.SetAttribute("Id","ExiftoolFilesGroup"); $frag.AppendChild($grp) | Out-Null
           $i = 0
-          Get-ChildItem $filesDir.Path -Recurse -File | ForEach-Object {
-            $src = $_.FullName.Replace('\', '/')
-            $compDefs += "        <Component Id=`"ExifComp$i`" Guid=`"*`"><File Id=`"ExifFile$i`" Source=`"$src`" KeyPath=`"yes`"/></Component>"
-            $compRefs += "      <ComponentRef Id=`"ExifComp$i`"/>"
+          Get-ChildItem $filesDir -Recurse -File | ForEach-Object {
+            $src = $_.FullName.Replace('\','/')
+            $comp = $doc.CreateElement("Component",$ns)
+            $comp.SetAttribute("Id","ExifComp$i"); $comp.SetAttribute("Guid","*")
+            $dir.AppendChild($comp) | Out-Null
+            $f = $doc.CreateElement("File",$ns)
+            $f.SetAttribute("Id","ExifFile$i"); $f.SetAttribute("Source",$src); $f.SetAttribute("KeyPath","yes")
+            $comp.AppendChild($f) | Out-Null
+            $ref = $doc.CreateElement("ComponentRef",$ns)
+            $ref.SetAttribute("Id","ExifComp$i"); $grp.AppendChild($ref) | Out-Null
             $i++
           }
-          @"
-<?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Fragment>
-    <DirectoryRef Id="INSTALLDIR">
-      <Directory Id="EXIFTOOL_FILES_DIR" Name="exiftool_files">
-$($compDefs -join "`n")
-      </Directory>
-    </DirectoryRef>
-    <ComponentGroup Id="ExiftoolFilesGroup">
-$($compRefs -join "`n")
-    </ComponentGroup>
-  </Fragment>
-</Wix>
-"@ | Out-File -FilePath "src-tauri/wix/exiftool_files.wxs" -Encoding UTF8
+          $doc.Save((Resolve-Path ".").Path + "/src-tauri/wix/exiftool_files.wxs")
           Write-Host "WiX fragment generated: $i files"
 
       - run: npm install
@@ -100,7 +113,7 @@ $($compRefs -join "`n")
           tagName: ${{ github.ref_name }}
           releaseName: "Google Takeout Connect ${{ github.ref_name }}"
           releaseBody: |
-            ## Google Takeout Connect v0.1.0
+            ## Google Takeout Connect ${{ github.ref_name }}
 
             Google Takeout でエクスポートした写真・動画ファイルに、撮影日時などのメタデータを書き戻すデスクトップアプリです。
 
@@ -120,9 +133,9 @@ $($compRefs -join "`n")
 
             | OS | ファイル |
             |---|---|
-            | Windows (64bit) | `Google.Takeout.Connect_0.1.0_x64_ja-JP.msi` |
-            | macOS (Apple Silicon / M1以降) | `Google.Takeout.Connect_0.1.0_aarch64.dmg` |
-            | macOS (Intel) | `Google.Takeout.Connect_0.1.0_x64.dmg` |
+            | Windows (64bit) | `*_x64_ja-JP.msi` |
+            | macOS (Apple Silicon / M1以降) | `*_aarch64.dmg` |
+            | macOS (Intel) | `*_x64.dmg` |
 
             ---
 

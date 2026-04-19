@@ -109,7 +109,7 @@ fn apply_image_meta(dst: &Path, exif_datetime: &str, exiftool: &Path) -> Result<
 
 /// ffmpegで動画メタデータを書き込む
 fn apply_video_meta(src: &Path, dst: &Path, iso_datetime: &str, ffmpeg: &Path) -> Result<()> {
-    let tmp = dst.with_extension(".__tmp__.mp4");
+    let tmp = dst.with_extension("__tmp__");
 
     let output = make_command(ffmpeg)
         .args([
