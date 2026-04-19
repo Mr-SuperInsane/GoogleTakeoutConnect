@@ -38,18 +38,21 @@ jobs:
       - name: ExifTool / ffmpeg インストール & 配置
         shell: pwsh
         run: |
-          # ExifTool (chocoで単体exe)
-          choco install exiftool -y --no-progress
-          # ffmpeg: DLL不要なstaticビルドを直接ダウンロード
+          # ExifTool: 公式サイトから最新版を直接ダウンロード（chocoシムを避ける）
+          $etPage = Invoke-WebRequest -Uri "https://exiftool.org/" -UseBasicParsing
+          $etVer  = [regex]::Match($etPage.Content, 'exiftool-(\d+\.\d+)_64\.zip').Groups[1].Value
+          Invoke-WebRequest -Uri "https://exiftool.org/exiftool-${etVer}_64.zip" -OutFile exiftool.zip
+          Expand-Archive exiftool.zip -DestinationPath exiftool_tmp
+          $etExe = Get-ChildItem exiftool_tmp -Recurse -Filter "*.exe" | Select-Object -First 1
+          # ffmpeg: DLL不要なstaticビルド
           $ffUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
           Invoke-WebRequest -Uri $ffUrl -OutFile ffmpeg.zip
           Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
           $ffExe = Get-ChildItem ffmpeg_tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
           New-Item -ItemType Directory -Force -Path "src-tauri/binaries" | Out-Null
-          $exiftool = Get-Command exiftool -ErrorAction Stop
-          Copy-Item $exiftool.Source "src-tauri/binaries/exiftool-x86_64-pc-windows-msvc.exe" -Force
-          Move-Item $ffExe.FullName  "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"   -Force
-          Remove-Item ffmpeg.zip, ffmpeg_tmp -Recurse -Force
+          Move-Item $etExe.FullName "src-tauri/binaries/exiftool-x86_64-pc-windows-msvc.exe" -Force
+          Move-Item $ffExe.FullName "src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"   -Force
+          Remove-Item exiftool.zip, exiftool_tmp, ffmpeg.zip, ffmpeg_tmp -Recurse -Force
 
       - run: npm install
 

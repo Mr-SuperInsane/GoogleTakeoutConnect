@@ -96,7 +96,13 @@ fn apply_image_meta(dst: &Path, exif_datetime: &str, exiftool: &Path) -> Result<
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("ExifToolエラー: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(anyhow::anyhow!(
+            "ExifToolエラー(code={}): {} {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim(),
+            stdout.trim()
+        ));
     }
     Ok(())
 }
@@ -124,7 +130,13 @@ fn apply_video_meta(src: &Path, dst: &Path, iso_datetime: &str, ffmpeg: &Path) -
     } else {
         let _ = std::fs::remove_file(&tmp);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("ffmpegエラー: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(anyhow::anyhow!(
+            "ffmpegエラー(code={}): {} {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim(),
+            stdout.trim()
+        ));
     }
     Ok(())
 }
