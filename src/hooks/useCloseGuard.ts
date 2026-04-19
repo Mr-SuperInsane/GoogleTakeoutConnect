@@ -1,23 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
 export function useCloseGuard(isProcessing: boolean) {
-  const isProcessingRef = useRef(isProcessing);
-
   useEffect(() => {
-    isProcessingRef.current = isProcessing;
-  }, [isProcessing]);
+    if (!isProcessing) return; // 処理中以外はハンドラ不要
 
-  useEffect(() => {
     const win = getCurrentWindow();
     let unlisten: (() => void) | null = null;
+    let cancelled = false;
 
     win.onCloseRequested(async (event) => {
-      if (!isProcessingRef.current) return;
-
       event.preventDefault();
-
       const confirmed = await ask(
         "処理がまだ完了していません。\nアプリを閉じると処理が中断されます。\n\n本当に閉じますか？",
         {
@@ -27,16 +21,15 @@ export function useCloseGuard(isProcessing: boolean) {
           cancelLabel: "キャンセル",
         }
       );
-
-      if (confirmed) {
-        await win.destroy();
-      }
+      if (confirmed) await win.destroy();
     }).then((fn) => {
-      unlisten = fn;
+      if (cancelled) fn(); // クリーンアップ後に Promise が解決した場合は即解除
+      else unlisten = fn;
     });
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
-  }, []); // リスナーは一度だけ登録
+  }, [isProcessing]);
 }
