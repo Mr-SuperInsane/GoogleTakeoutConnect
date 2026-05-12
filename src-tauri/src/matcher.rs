@@ -130,9 +130,15 @@ fn build_json_candidates(media_name: &str) -> Vec<String> {
         }
     }
 
-    // 3. 編集済みサフィックスを取り除いてオリジナルのJSONを探す
-    //    例: IMG_0001-edited.jpg → IMG_0001.jpg.json
+    // 3. supplemental-metadata.json 形式（Google Takeout 新形式）
+    //    例: IMG_1234.jpg → IMG_1234.jpg.supplemental-metadata.json
+    candidates.push(format!("{}.supplemental-metadata.json", media_name));
+    //    例: IMG_1234.jpg → IMG_1234.supplemental-metadata.json
     let (stem, ext) = split_stem_ext(media_name);
+    candidates.push(format!("{}.supplemental-metadata.json", stem));
+
+    // 4. 編集済みサフィックスを取り除いてオリジナルのJSONを探す
+    //    例: IMG_0001-edited.jpg → IMG_0001.jpg.json
     for suffix in EDITED_SUFFIXES {
         if stem.to_lowercase().ends_with(suffix) {
             let base = &stem[..stem.len() - suffix.len()];
